@@ -1,13 +1,13 @@
 const STORAGE_KEYS = {
-  jsonData: "json_filter_data",
-  fileName: "json_filter_file_name",
   objKind: "json_filter_objKind",
   dateFrom: "json_filter_date_from",
   dateTo: "json_filter_date_to",
   result: "json_filter_result",
+  fileNames: "json_filter_file_names"
 };
 
 let jsonData = [];
+let loadedFileNames = [];
 
 const fileInput = document.getElementById("fileInput");
 const objKindInput = document.getElementById("objKindInput");
@@ -18,9 +18,12 @@ const resetBtn = document.getElementById("resetBtn");
 const clearAllBtn = document.getElementById("clearAllBtn");
 
 const statusEl = document.getElementById("status");
+const filesCountEl = document.getElementById("filesCount");
+const objectsCountEl = document.getElementById("objectsCount");
 const countEl = document.getElementById("count");
 const currentObjKindEl = document.getElementById("currentObjKind");
 const currentDateRangeEl = document.getElementById("currentDateRange");
+const fileListEl = document.getElementById("fileList");
 const resultsEl = document.getElementById("results");
 
 function updateStatus(text) {
@@ -37,6 +40,15 @@ function saveResultToStorage(result) {
   localStorage.setItem(STORAGE_KEYS.result, JSON.stringify(result));
 }
 
+function saveFileNamesToStorage() {
+  localStorage.setItem(STORAGE_KEYS.fileNames, JSON.stringify(loadedFileNames));
+}
+
+function updateTopCounters() {
+  filesCountEl.textContent = String(loadedFileNames.length);
+  objectsCountEl.textContent = String(jsonData.length);
+}
+
 function setSummary(resultLength) {
   countEl.textContent = String(resultLength);
   currentObjKindEl.textContent = objKindInput.value.trim() || "—";
@@ -46,16 +58,38 @@ function setSummary(resultLength) {
   currentDateRangeEl.textContent = `${from} — ${to}`;
 }
 
+function renderFileList() {
+  if (!loadedFileNames.length) {
+    fileListEl.className = "file-list empty-list";
+    fileListEl.textContent = "Список пока пуст";
+    return;
+  }
+
+  fileListEl.className = "file-list";
+  fileListEl.innerHTML = loadedFileNames
+    .map((name) => `<span class="file-chip">${escapeHtml(name)}</span>`)
+    .join("");
+}
+
 function formatAddress(address = {}) {
   return [
     address.region,
     address.district,
     address.city,
     address.locality,
-    address.street,
+    address.street
   ]
     .filter(Boolean)
     .join(", ");
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function renderResults(result) {
@@ -65,74 +99,142 @@ function renderResults(result) {
   }
 
   resultsEl.innerHTML = result
-    .map(
-      (item) => `
+    .map((item) => {
+      const cadBlockNum = escapeHtml(item.cadBlockNum || "—");
+      const objKind = escapeHtml(item.objKind || "—");
+      const regDateStr = escapeHtml(item.right?.regDateStr || "—");
+      const type = escapeHtml(item.type || "—");
+      const status = escapeHtml(item.status || "—");
+      const area = escapeHtml(item.area ?? "—");
+      const purpose = escapeHtml(item.purpose?.text || "—");
+      const address = escapeHtml(formatAddress(item.address) || "—");
+
+      return `
         <div class="result-card">
-          <div class="result-row"><span class="result-label">cadBlockNum:</span> ${item.cadBlockNum || "—"}</div>
-          <div class="result-row"><span class="result-label">objKind:</span> ${item.objKind || "—"}</div>
-          <div class="result-row"><span class="result-label">regDateStr:</span> ${item.right?.regDateStr || "—"}</div>
-          <div class="result-row"><span class="result-label">type:</span> ${item.type || "—"}</div>
-          <div class="result-row"><span class="result-label">status:</span> ${item.status || "—"}</div>
-          <div class="result-row"><span class="result-label">area:</span> ${item.area ?? "—"}</div>
-          <div class="result-row"><span class="result-label">purpose:</span> ${item.purpose?.text || "—"}</div>
-          <div class="result-row"><span class="result-label">address:</span> ${formatAddress(item.address) || "—"}</div>
+          <div class="result-row"><span class="result-label">cadBlockNum:</span> ${cadBlockNum}</div>
+          <div class="result-row"><span class="result-label">objKind:</span> ${objKind}</div>
+          <div class="result-row"><span class="result-label">regDateStr:</span> ${regDateStr}</div>
+          <div class="result-row"><span class="result-label">type:</span> ${type}</div>
+          <div class="result-row"><span class="result-label">status:</span> ${status}</div>
+          <div class="result-row"><span class="result-label">area:</span> ${area}</div>
+          <div class="result-row"><span class="result-label">purpose:</span> ${purpose}</div>
+          <div class="result-row"><span class="result-label">address:</span> ${address}</div>
         </div>
-      `,
-    )
+      `;
+    })
     .join("");
+}
+
+function normalizeDate(dateString) {
+  if (!dateString) return null;
+
+  const dateOnly = String(dateString).slice(0, 10);
+  const date = new Date(dateOnly);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date;
+}
+
+function resetVisualResult() {
+  setSummary(0);
+  resultsEl.innerHTML = `<div class="empty">Здесь появится результат...</div>`;
 }
 
 function loadFromStorage() {
   const savedObjKind = localStorage.getItem(STORAGE_KEYS.objKind);
   const savedDateFrom = localStorage.getItem(STORAGE_KEYS.dateFrom);
   const savedDateTo = localStorage.getItem(STORAGE_KEYS.dateTo);
-  const savedJsonData = localStorage.getItem(STORAGE_KEYS.jsonData);
-  const savedFileName = localStorage.getItem(STORAGE_KEYS.fileName);
   const savedResult = localStorage.getItem(STORAGE_KEYS.result);
+  const savedFileNames = localStorage.getItem(STORAGE_KEYS.fileNames);
 
   if (savedObjKind) objKindInput.value = savedObjKind;
   if (savedDateFrom) dateFromInput.value = savedDateFrom;
   if (savedDateTo) dateToInput.value = savedDateTo;
 
-  if (savedJsonData) {
+  if (savedFileNames) {
     try {
-      jsonData = JSON.parse(savedJsonData);
-      updateStatus(
-        savedFileName
-          ? `Загружен сохраненный файл: ${savedFileName}`
-          : "JSON восстановлен из localStorage",
-      );
-    } catch (error) {
-      jsonData = [];
-      updateStatus("Не удалось восстановить JSON из localStorage");
+      loadedFileNames = JSON.parse(savedFileNames);
+    } catch {
+      loadedFileNames = [];
     }
   }
+
+  renderFileList();
+  updateTopCounters();
 
   if (savedResult) {
     try {
       const parsedResult = JSON.parse(savedResult);
       setSummary(parsedResult.length);
       renderResults(parsedResult);
-    } catch (error) {
-      setSummary(0);
+    } catch {
+      resetVisualResult();
     }
   } else {
-    setSummary(0);
+    resetVisualResult();
+  }
+
+  if (loadedFileNames.length) {
+    updateStatus("Имена файлов и результат восстановлены. Сами JSON нужно загрузить заново.");
+  } else {
+    updateStatus("Файлы пока не загружены");
   }
 }
 
-function normalizeDate(dateString) {
-  if (!dateString) return null;
-  const dateOnly = String(dateString).slice(0, 10);
-  const date = new Date(dateOnly);
-  return Number.isNaN(date.getTime()) ? null : date;
+async function handleFilesChange(event) {
+  const files = Array.from(event.target.files || []);
+
+  if (!files.length) {
+    return;
+  }
+
+  updateStatus("Загрузка файлов...");
+
+  try {
+    const allData = [];
+    const names = [];
+
+    for (const file of files) {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+
+      if (!Array.isArray(parsed)) {
+        throw new Error(`Файл "${file.name}" должен содержать массив объектов`);
+      }
+
+      allData.push(...parsed);
+      names.push(file.name);
+    }
+
+    jsonData = allData;
+    loadedFileNames = names;
+
+    saveFileNamesToStorage();
+    updateTopCounters();
+    renderFileList();
+
+    localStorage.removeItem(STORAGE_KEYS.result);
+    resetVisualResult();
+
+    updateStatus(`Загружено файлов: ${files.length}. Всего объектов: ${jsonData.length}`);
+    resultsEl.innerHTML = `<div class="empty">Файлы успешно загружены. Теперь нажмите "Запустить фильтр".</div>`;
+  } catch (error) {
+    jsonData = [];
+    loadedFileNames = [];
+    saveFileNamesToStorage();
+    updateTopCounters();
+    renderFileList();
+    resetVisualResult();
+    updateStatus(`Ошибка чтения JSON: ${error.message}`);
+  }
 }
 
 function filterData() {
-  if (!Array.isArray(jsonData)) {
-    updateStatus("Ошибка: JSON должен быть массивом объектов");
-    renderResults([]);
-    setSummary(0);
+  if (!jsonData.length) {
+    updateStatus("Сначала загрузите хотя бы один JSON-файл");
     return;
   }
 
@@ -143,12 +245,12 @@ function filterData() {
   saveFiltersToStorage();
 
   if (!objKindValue) {
-    updateStatus("Заполни поле objKind");
+    updateStatus("Заполните поле objKind");
     return;
   }
 
   if (!dateFromValue || !dateToValue) {
-    updateStatus("Выбери обе даты: с и по");
+    updateStatus("Выберите обе даты: с и по");
     return;
   }
 
@@ -161,18 +263,23 @@ function filterData() {
   const toDate = new Date(dateToValue);
 
   const result = jsonData.filter((obj) => {
-    if (obj.objKind !== objKindValue) return false;
+    if (obj.objKind !== objKindValue) {
+      return false;
+    }
 
     const regDate = normalizeDate(obj.right?.regDateStr);
-    if (!regDate) return false;
+
+    if (!regDate) {
+      return false;
+    }
 
     return regDate >= fromDate && regDate <= toDate;
   });
 
-  updateStatus("Фильтр выполнен");
+  saveResultToStorage(result);
   setSummary(result.length);
   renderResults(result);
-  saveResultToStorage(result);
+  updateStatus(`Фильтр выполнен. Найдено объектов: ${result.length}`);
 }
 
 function resetFilters() {
@@ -186,62 +293,32 @@ function resetFilters() {
   localStorage.removeItem(STORAGE_KEYS.result);
 
   setSummary(0);
-  resultsEl.innerHTML = `<div class="empty">Фильтры очищены. JSON остался загруженным.</div>`;
-  updateStatus("Поля фильтра очищены");
+  resultsEl.innerHTML = `<div class="empty">Фильтры очищены. Загруженные файлы остались в памяти текущей страницы.</div>`;
+  updateStatus("Фильтры сброшены");
 }
 
 function clearAllData() {
-  localStorage.removeItem(STORAGE_KEYS.jsonData);
-  localStorage.removeItem(STORAGE_KEYS.fileName);
-  localStorage.removeItem(STORAGE_KEYS.objKind);
-  localStorage.removeItem(STORAGE_KEYS.dateFrom);
-  localStorage.removeItem(STORAGE_KEYS.dateTo);
-  localStorage.removeItem(STORAGE_KEYS.result);
-
   jsonData = [];
+  loadedFileNames = [];
+
   fileInput.value = "";
   objKindInput.value = "";
   dateFromInput.value = "";
   dateToInput.value = "";
 
-  setSummary(0);
-  resultsEl.innerHTML = `<div class="empty">Все данные удалены.</div>`;
-  updateStatus("localStorage очищен, JSON удален");
+  localStorage.removeItem(STORAGE_KEYS.objKind);
+  localStorage.removeItem(STORAGE_KEYS.dateFrom);
+  localStorage.removeItem(STORAGE_KEYS.dateTo);
+  localStorage.removeItem(STORAGE_KEYS.result);
+  localStorage.removeItem(STORAGE_KEYS.fileNames);
+
+  updateTopCounters();
+  renderFileList();
+  resetVisualResult();
+  updateStatus("Все данные очищены");
 }
 
-fileInput.addEventListener("change", function (e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-
-  reader.onload = function (event) {
-    try {
-      const parsed = JSON.parse(event.target.result);
-
-      if (!Array.isArray(parsed)) {
-        updateStatus("Ошибка: JSON должен быть массивом");
-        resultsEl.innerHTML = `<div class="empty">Загруженный JSON должен быть массивом объектов.</div>`;
-        return;
-      }
-
-      jsonData = parsed;
-
-      localStorage.setItem(STORAGE_KEYS.jsonData, JSON.stringify(parsed));
-      localStorage.setItem(STORAGE_KEYS.fileName, file.name);
-
-      updateStatus(`Файл загружен и сохранен: ${file.name}`);
-      resultsEl.innerHTML = `<div class="empty">JSON успешно загружен. Теперь запусти фильтр.</div>`;
-    } catch (error) {
-      jsonData = [];
-      updateStatus("Ошибка чтения JSON");
-      resultsEl.innerHTML = `<div class="empty">Файл не является корректным JSON.</div>`;
-    }
-  };
-
-  reader.readAsText(file);
-});
-
+fileInput.addEventListener("change", handleFilesChange);
 objKindInput.addEventListener("input", saveFiltersToStorage);
 dateFromInput.addEventListener("input", saveFiltersToStorage);
 dateToInput.addEventListener("input", saveFiltersToStorage);
