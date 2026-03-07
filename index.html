@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Фильтр JSON</title>
+    <link rel="stylesheet" href="/main.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <h1>Фильтр JSON</h1>
+        <div class="subtitle">
+          Загрузите JSON, укажите <b>objKind</b> и диапазон даты
+          <b>regDateStr</b>. Все поля и загруженный JSON сохраняются в браузере.
+        </div>
+
+        <div class="grid">
+          <div class="field">
+            <label for="fileInput">JSON-файл</label>
+            <input type="file" id="fileInput" accept=".json" />
+          </div>
+
+          <div class="field">
+            <label for="objKindInput">objKind</label>
+            <input
+              type="text"
+              id="objKindInput"
+              placeholder="Например: 21400800500"
+            />
+          </div>
+
+          <div class="field">
+            <label for="dateFromInput">Дата с</label>
+            <input type="date" id="dateFromInput" />
+          </div>
+
+          <div class="field">
+            <label for="dateToInput">Дата по</label>
+            <input type="date" id="dateToInput" />
+          </div>
+        </div>
+
+        <div class="buttons">
+          <button class="primary" id="runBtn">Запустить фильтр</button>
+          <button class="secondary" id="resetBtn">Сбросить фильтры</button>
+          <button class="danger" id="clearAllBtn">Удалить всё</button>
+        </div>
+
+        <div class="status" id="status">Файл пока не загружен</div>
+
+        <div class="summary">
+          <div class="summary-box">
+            <div class="summary-title">Найдено объектов</div>
+            <div class="summary-value" id="count">0</div>
+          </div>
+
+          <div class="summary-box">
+            <div class="summary-title">Текущий objKind</div>
+            <div class="summary-value" id="currentObjKind">—</div>
+          </div>
+
+          <div class="summary-box">
+            <div class="summary-title">Диапазон дат</div>
+            <div class="summary-value" id="currentDateRange">—</div>
+          </div>
+        </div>
+
+        <div id="results" class="results">
+          <div class="empty">Здесь появится результат...</div>
+        </div>
+
+        <div class="hint">
+          Для всего 2020 года поставьте:<br />
+          <b>Дата с:</b> 2020-01-01<br />
+          <b>Дата по:</b> 2020-12-31
+        </div>
+      </div>
+    </div>
+    <script src="/filter.js"></script>
+  </body>
+</html>
