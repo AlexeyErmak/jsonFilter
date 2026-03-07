@@ -1,19 +1,23 @@
 const STORAGE_KEYS = {
   objKind: "json_filter_objKind",
+  purpose: "json_filter_purpose",
   dateFrom: "json_filter_date_from",
   dateTo: "json_filter_date_to",
   result: "json_filter_result",
-  fileNames: "json_filter_file_names"
+  fileNames: "json_filter_file_names",
 };
 
 let jsonData = [];
 let loadedFileNames = [];
+let lastFilteredResult = [];
 
 const fileInput = document.getElementById("fileInput");
 const objKindInput = document.getElementById("objKindInput");
+const purposeInput = document.getElementById("purposeInput");
 const dateFromInput = document.getElementById("dateFromInput");
 const dateToInput = document.getElementById("dateToInput");
 const runBtn = document.getElementById("runBtn");
+const downloadBtn = document.getElementById("downloadBtn");
 const resetBtn = document.getElementById("resetBtn");
 const clearAllBtn = document.getElementById("clearAllBtn");
 
@@ -22,6 +26,7 @@ const filesCountEl = document.getElementById("filesCount");
 const objectsCountEl = document.getElementById("objectsCount");
 const countEl = document.getElementById("count");
 const currentObjKindEl = document.getElementById("currentObjKind");
+const currentPurposeEl = document.getElementById("currentPurpose");
 const currentDateRangeEl = document.getElementById("currentDateRange");
 const fileListEl = document.getElementById("fileList");
 const resultsEl = document.getElementById("results");
@@ -30,8 +35,18 @@ function updateStatus(text) {
   statusEl.textContent = text;
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function saveFiltersToStorage() {
   localStorage.setItem(STORAGE_KEYS.objKind, objKindInput.value);
+  localStorage.setItem(STORAGE_KEYS.purpose, purposeInput.value);
   localStorage.setItem(STORAGE_KEYS.dateFrom, dateFromInput.value);
   localStorage.setItem(STORAGE_KEYS.dateTo, dateToInput.value);
 }
@@ -52,6 +67,7 @@ function updateTopCounters() {
 function setSummary(resultLength) {
   countEl.textContent = String(resultLength);
   currentObjKindEl.textContent = objKindInput.value.trim() || "—";
+  currentPurposeEl.textContent = purposeInput.value.trim() || "—";
 
   const from = dateFromInput.value || "—";
   const to = dateToInput.value || "—";
@@ -77,19 +93,63 @@ function formatAddress(address = {}) {
     address.district,
     address.city,
     address.locality,
-    address.street
+    address.street,
   ]
     .filter(Boolean)
     .join(", ");
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+function getRegMonth(obj) {
+  if (obj.regDate) {
+    return String(obj.regDate).slice(0, 7);
+  }
+
+  if (obj.right?.regDateStr) {
+    return String(obj.right.regDateStr).slice(0, 7);
+  }
+
+  return null;
+}
+
+function resetVisualResult() {
+  lastFilteredResult = [];
+  setSummary(0);
+  resultsEl.innerHTML = `<div class="empty">Здесь появится результат...</div>`;
+}
+
+function getDownloadableResult() {
+  return lastFilteredResult.map(({ __sourceFile, ...rest }) => ({
+    ...rest,
+    sourceFile: __sourceFile || "",
+  }));
+}
+
+function downloadResultJson() {
+  if (!lastFilteredResult.length) {
+    updateStatus("Нечего скачивать. Сначала выполните фильтр.");
+    return;
+  }
+
+  const cleanResult = getDownloadableResult();
+  const jsonString = JSON.stringify(cleanResult, null, 2);
+  const blob = new Blob([jsonString], {
+    type: "application/json;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const fileName = `filtered-result-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}-${pad(now.getMinutes())}.json`;
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(url);
+  updateStatus(`Результат скачан: ${fileName}`);
 }
 
 function renderResults(result) {
@@ -100,9 +160,10 @@ function renderResults(result) {
 
   resultsEl.innerHTML = result
     .map((item) => {
+      const sourceFile = escapeHtml(item.__sourceFile || "—");
       const cadBlockNum = escapeHtml(item.cadBlockNum || "—");
       const objKind = escapeHtml(item.objKind || "—");
-      const regDateStr = escapeHtml(item.right?.regDateStr || "—");
+      const regDate = escapeHtml(item.regDate || item.right?.regDateStr || "—");
       const type = escapeHtml(item.type || "—");
       const status = escapeHtml(item.status || "—");
       const area = escapeHtml(item.area ?? "—");
@@ -111,9 +172,10 @@ function renderResults(result) {
 
       return `
         <div class="result-card">
+          <div class="source-file">Файл: ${sourceFile}</div>
           <div class="result-row"><span class="result-label">cadBlockNum:</span> ${cadBlockNum}</div>
           <div class="result-row"><span class="result-label">objKind:</span> ${objKind}</div>
-          <div class="result-row"><span class="result-label">regDateStr:</span> ${regDateStr}</div>
+          <div class="result-row"><span class="result-label">regDate:</span> ${regDate}</div>
           <div class="result-row"><span class="result-label">type:</span> ${type}</div>
           <div class="result-row"><span class="result-label">status:</span> ${status}</div>
           <div class="result-row"><span class="result-label">area:</span> ${area}</div>
@@ -125,32 +187,16 @@ function renderResults(result) {
     .join("");
 }
 
-function normalizeDate(dateString) {
-  if (!dateString) return null;
-
-  const dateOnly = String(dateString).slice(0, 10);
-  const date = new Date(dateOnly);
-
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return date;
-}
-
-function resetVisualResult() {
-  setSummary(0);
-  resultsEl.innerHTML = `<div class="empty">Здесь появится результат...</div>`;
-}
-
 function loadFromStorage() {
   const savedObjKind = localStorage.getItem(STORAGE_KEYS.objKind);
+  const savedPurpose = localStorage.getItem(STORAGE_KEYS.purpose);
   const savedDateFrom = localStorage.getItem(STORAGE_KEYS.dateFrom);
   const savedDateTo = localStorage.getItem(STORAGE_KEYS.dateTo);
   const savedResult = localStorage.getItem(STORAGE_KEYS.result);
   const savedFileNames = localStorage.getItem(STORAGE_KEYS.fileNames);
 
   if (savedObjKind) objKindInput.value = savedObjKind;
+  if (savedPurpose) purposeInput.value = savedPurpose;
   if (savedDateFrom) dateFromInput.value = savedDateFrom;
   if (savedDateTo) dateToInput.value = savedDateTo;
 
@@ -168,6 +214,7 @@ function loadFromStorage() {
   if (savedResult) {
     try {
       const parsedResult = JSON.parse(savedResult);
+      lastFilteredResult = parsedResult;
       setSummary(parsedResult.length);
       renderResults(parsedResult);
     } catch {
@@ -178,7 +225,9 @@ function loadFromStorage() {
   }
 
   if (loadedFileNames.length) {
-    updateStatus("Имена файлов и результат восстановлены. Сами JSON нужно загрузить заново.");
+    updateStatus(
+      "Имена файлов и результат восстановлены. Сами JSON нужно загрузить заново.",
+    );
   } else {
     updateStatus("Файлы пока не загружены");
   }
@@ -187,9 +236,7 @@ function loadFromStorage() {
 async function handleFilesChange(event) {
   const files = Array.from(event.target.files || []);
 
-  if (!files.length) {
-    return;
-  }
+  if (!files.length) return;
 
   updateStatus("Загрузка файлов...");
 
@@ -205,7 +252,12 @@ async function handleFilesChange(event) {
         throw new Error(`Файл "${file.name}" должен содержать массив объектов`);
       }
 
-      allData.push(...parsed);
+      const parsedWithSource = parsed.map((item) => ({
+        ...item,
+        __sourceFile: file.name,
+      }));
+
+      allData.push(...parsedWithSource);
       names.push(file.name);
     }
 
@@ -219,7 +271,9 @@ async function handleFilesChange(event) {
     localStorage.removeItem(STORAGE_KEYS.result);
     resetVisualResult();
 
-    updateStatus(`Загружено файлов: ${files.length}. Всего объектов: ${jsonData.length}`);
+    updateStatus(
+      `Загружено файлов: ${files.length}. Всего объектов: ${jsonData.length}`,
+    );
     resultsEl.innerHTML = `<div class="empty">Файлы успешно загружены. Теперь нажмите "Запустить фильтр".</div>`;
   } catch (error) {
     jsonData = [];
@@ -239,6 +293,7 @@ function filterData() {
   }
 
   const objKindValue = objKindInput.value.trim();
+  const purposeValue = purposeInput.value.trim().toLowerCase();
   const dateFromValue = dateFromInput.value;
   const dateToValue = dateToInput.value;
 
@@ -259,23 +314,34 @@ function filterData() {
     return;
   }
 
-  const fromDate = new Date(dateFromValue);
-  const toDate = new Date(dateToValue);
+  const fromMonth = dateFromValue.slice(0, 7);
+  const toMonth = dateToValue.slice(0, 7);
 
   const result = jsonData.filter((obj) => {
     if (obj.objKind !== objKindValue) {
       return false;
     }
 
-    const regDate = normalizeDate(obj.right?.regDateStr);
-
-    if (!regDate) {
+    const regMonth = getRegMonth(obj);
+    if (!regMonth) {
       return false;
     }
 
-    return regDate >= fromDate && regDate <= toDate;
+    if (regMonth < fromMonth || regMonth > toMonth) {
+      return false;
+    }
+
+    if (purposeValue) {
+      const purposeText = (obj.purpose?.text || "").toLowerCase();
+      if (!purposeText.includes(purposeValue)) {
+        return false;
+      }
+    }
+
+    return true;
   });
 
+  lastFilteredResult = result;
   saveResultToStorage(result);
   setSummary(result.length);
   renderResults(result);
@@ -284,15 +350,17 @@ function filterData() {
 
 function resetFilters() {
   objKindInput.value = "";
+  purposeInput.value = "";
   dateFromInput.value = "";
   dateToInput.value = "";
 
   localStorage.removeItem(STORAGE_KEYS.objKind);
+  localStorage.removeItem(STORAGE_KEYS.purpose);
   localStorage.removeItem(STORAGE_KEYS.dateFrom);
   localStorage.removeItem(STORAGE_KEYS.dateTo);
   localStorage.removeItem(STORAGE_KEYS.result);
 
-  setSummary(0);
+  resetVisualResult();
   resultsEl.innerHTML = `<div class="empty">Фильтры очищены. Загруженные файлы остались в памяти текущей страницы.</div>`;
   updateStatus("Фильтры сброшены");
 }
@@ -300,13 +368,16 @@ function resetFilters() {
 function clearAllData() {
   jsonData = [];
   loadedFileNames = [];
+  lastFilteredResult = [];
 
   fileInput.value = "";
   objKindInput.value = "";
+  purposeInput.value = "";
   dateFromInput.value = "";
   dateToInput.value = "";
 
   localStorage.removeItem(STORAGE_KEYS.objKind);
+  localStorage.removeItem(STORAGE_KEYS.purpose);
   localStorage.removeItem(STORAGE_KEYS.dateFrom);
   localStorage.removeItem(STORAGE_KEYS.dateTo);
   localStorage.removeItem(STORAGE_KEYS.result);
@@ -320,10 +391,12 @@ function clearAllData() {
 
 fileInput.addEventListener("change", handleFilesChange);
 objKindInput.addEventListener("input", saveFiltersToStorage);
+purposeInput.addEventListener("input", saveFiltersToStorage);
 dateFromInput.addEventListener("input", saveFiltersToStorage);
 dateToInput.addEventListener("input", saveFiltersToStorage);
 
 runBtn.addEventListener("click", filterData);
+downloadBtn.addEventListener("click", downloadResultJson);
 resetBtn.addEventListener("click", resetFilters);
 clearAllBtn.addEventListener("click", clearAllData);
 
