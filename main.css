@@ -35,7 +35,7 @@ h1 {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 14px;
   margin-bottom: 18px;
 }
@@ -94,6 +94,16 @@ button {
 
 .primary:hover {
   background: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.success {
+  background: #16a34a;
+  color: white;
+}
+
+.success:hover {
+  background: #15803d;
   transform: translateY(-1px);
 }
 
@@ -211,6 +221,18 @@ button {
   color: #111827;
 }
 
+.source-file {
+  display: inline-block;
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  background: #ecfdf5;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .empty {
   padding: 18px;
   border-radius: 14px;
@@ -225,12 +247,6 @@ button {
   color: #6b7280;
   font-size: 13px;
   line-height: 1.6;
-}
-
-@media (max-width: 900px) {
-  .grid {
-    grid-template-columns: 1fr 1fr;
-  }
 }
 
 @media (max-width: 700px) {
