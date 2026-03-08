@@ -107,8 +107,18 @@
         </div>
 
         <div class="file-list-block">
-          <div class="file-list-title">Загруженные файлы</div>
-          <div id="fileList" class="file-list empty-list">Список пока пуст</div>
+          <div class="file-list-header">
+            <div class="file-list-title">Загруженные файлы</div>
+            <button id="toggleFilesBtn" class="toggle-files-btn">
+              Показать
+            </button>
+          </div>
+
+          <div id="fileListWrapper" class="file-list-wrapper hidden">
+            <div id="fileList" class="file-list empty-list">
+              Список пока пуст
+            </div>
+          </div>
         </div>
 
         <div id="results" class="results">
