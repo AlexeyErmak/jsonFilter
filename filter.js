@@ -31,6 +31,9 @@ const currentDateRangeEl = document.getElementById("currentDateRange");
 const fileListEl = document.getElementById("fileList");
 const resultsEl = document.getElementById("results");
 
+const toggleFilesBtn = document.getElementById("toggleFilesBtn");
+const fileListWrapper = document.getElementById("fileListWrapper");
+
 function updateStatus(text) {
   statusEl.textContent = text;
 }
@@ -399,6 +402,18 @@ runBtn.addEventListener("click", filterData);
 downloadBtn.addEventListener("click", downloadResultJson);
 resetBtn.addEventListener("click", resetFilters);
 clearAllBtn.addEventListener("click", clearAllData);
+
+toggleFilesBtn.addEventListener("click", () => {
+  const isHidden = fileListWrapper.classList.contains("hidden");
+
+  if (isHidden) {
+    fileListWrapper.classList.remove("hidden");
+    toggleFilesBtn.textContent = "Скрыть";
+  } else {
+    fileListWrapper.classList.add("hidden");
+    toggleFilesBtn.textContent = "Показать";
+  }
+});
 
 loadFromStorage();
 
